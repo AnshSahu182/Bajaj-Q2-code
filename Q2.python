@@ -1,0 +1,68 @@
+from flask import Flask, jsonify, request
+import pandas as pd
+import requests
+from datetime import datetime
+
+app = Flask(__name__)
+
+departments = pd.DataFrame([
+    [1, "HR"],
+    [2, "Finance"],
+    [3, "Engineering"],
+    [4, "Sales"],
+    [5, "Marketing"],
+    [6, "IT"]
+], columns=["DEPARTMENT_ID", "DEPARTMENT_NAME"])
+
+employees = pd.DataFrame([
+    [1, "John", "Williams", "1980-05-15", "Male", 3],
+    [2, "Sarah", "Johnson", "1990-07-20", "Female", 2],
+    [3, "Michael", "Smith", "1985-02-10", "Male", 3],
+    [4, "Emily", "Brown", "1992-11-30", "Female", 4],
+    [5, "David", "Jones", "1988-09-05", "Male", 5],
+    [6, "Olivia", "Davis", "1995-04-12", "Female", 1],
+    [7, "James", "Wilson", "1983-03-25", "Male", 6],
+    [8, "Sophia", "Anderson", "1991-08-17", "Female", 4],
+    [9, "Liam", "Miller", "1979-12-01", "Male", 1],
+    [10, "Emma", "Taylor", "1993-06-28", "Female", 5]
+], columns=["EMP_ID", "FIRST_NAME", "LAST_NAME", "DOB", "GENDER", "DEPARTMENT"])
+
+def calculate_younger_counts():
+    df = employees.copy()
+    df['DOB'] = pd.to_datetime(df['DOB'])
+    
+    df = df.merge(departments, left_on='DEPARTMENT', right_on='DEPARTMENT_ID', how='left')
+
+    results = []
+    for idx, emp in df.iterrows():
+        same_dept = df[df["DEPARTMENT"] == emp["DEPARTMENT"]]
+        younger_count = sum(same_dept["DOB"] > emp["DOB"])
+        results.append({
+            "EMP_ID": emp["EMP_ID"],
+            "FIRST_NAME": emp["FIRST_NAME"],
+            "LAST_NAME": emp["LAST_NAME"],
+            "DEPARTMENT_NAME": emp["DEPARTMENT_NAME"],
+            "YOUNGER_EMPLOYEES_COUNT": younger_count
+        })
+
+    result_df = pd.DataFrame(results).sort_values(by="EMP_ID", ascending=False)
+    return result_df.to_dict(orient="records")
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    result = calculate_younger_counts()
+    return jsonify(result)
+
+def send_webhook_request():
+    try:
+        url = 'http://localhost:5000/webhook'
+        response = requests.post(url)
+        print("Webhook POST response:")
+        print(response.json())
+    except Exception as e:
+        print(f"Webhook POST failed: {e}")
+
+if __name__ == '__main__':
+    import threading
+    threading.Timer(1.0, send_webhook_request).start()
+    app.run(debug=False)
